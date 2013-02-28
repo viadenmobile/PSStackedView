@@ -124,6 +124,12 @@ enum {
 /// enable scaling while fade in/out
 @property(nonatomic, assign) BOOL enableScalingFadeInOut;
 
+/// Property to disable panning
+@property (nonatomic, assign) BOOL enablePanning;
+
+/// Property to disable panning to left
+@property (nonatomic, assign) BOOL enableLefPanning;
+
 /// shadow width
 @property(nonatomic, assign) CGFloat defaultShadowWidth;
 

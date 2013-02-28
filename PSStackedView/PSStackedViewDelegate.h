@@ -8,6 +8,12 @@
 
 #import <Foundation/Foundation.h>
 
+enum
+{
+    PanDirectionLeft,
+    PanDirectionRight
+} typedef PanDirection;
+
 @class PSStackedViewController;
 @class UIViewController;
 
@@ -32,5 +38,8 @@
 
 /// viewController has been aligned (programmatically or by result of panning)
 - (void)stackedViewDidAlign:(PSStackedViewController *)stackedView;
+
+- (void)stackedView:(PSStackedViewController *)stackedView didPanEndedWithDirection:(PanDirection)direction inViewController:(UIViewController *)viewController;
+
 
 @end

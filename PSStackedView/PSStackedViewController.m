@@ -42,6 +42,7 @@ typedef void(^PSSVSimpleBlock)(void);
         unsigned int delegateDidRemoveViewController:1;
         unsigned int delegateDidPanViewController:1;
         unsigned int delegateDidAlign:1;
+        unsigned int delegateDidPanEnded;
     }delegateFlags_;
 }
 
@@ -114,6 +115,8 @@ typedef void(^PSSVSimpleBlock)(void);
     enableShadows_ = YES;
     enableDraggingPastInsets_ = YES;
     enableScalingFadeInOut_ = YES;
+    _enableLefPanning = YES;
+    _enablePanning = YES;
     defaultShadowWidth_ = 60.0f;
     defaultShadowAlpha_ = 0.2f;
     cornerRadius_ = 6.0f;
@@ -195,6 +198,7 @@ typedef void(^PSSVSimpleBlock)(void);
         delegateFlags_.delegateDidRemoveViewController = [delegate respondsToSelector:@selector(stackedView:didRemoveViewController:)];
         delegateFlags_.delegateDidPanViewController = [delegate respondsToSelector:@selector(stackedView:didPanViewController:byOffset:)];
         delegateFlags_.delegateDidAlign = [delegate respondsToSelector:@selector(stackedViewDidAlign:)];
+        delegateFlags_.delegateDidPanEnded = [delegate respondsToSelector:@selector(stackedView:didPanEndedWithDirection:inViewController:)];
 
     }
 }
@@ -233,6 +237,18 @@ typedef void(^PSSVSimpleBlock)(void);
     if (delegateFlags_.delegateDidAlign) {
         [self.delegate stackedViewDidAlign:self];
     }
+}
+
+- (void)delegateDidPanEndedWithDirection:(PanDirection)direction inViewController:(UIViewController *)viewController
+{
+    if (delegateFlags_.delegateDidPanEnded) {
+        [self.delegate stackedView:self didPanEndedWithDirection:direction inViewController:viewController];
+    }
+    else
+    {
+        [self alignStackAnimated:YES];
+    }
+    
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -533,6 +549,29 @@ enum {
     return frames;
 }
 
+- (float)calcucalateMinimalLeftInsetForController:(UIViewController*)currentViewController
+{
+    //part realization from rectsForControllers
+    // TODO: currently calculates *all* objects, should cache!
+    CGFloat floatIndex = [self nearestValidFloatIndex:self.floatIndex];
+    
+    int idx = [self.viewControllers indexOfObject:currentViewController];
+    
+    CGFloat leftPos = [self currentLeftInset];
+    
+    if (idx == floorf(floatIndex)) {
+        BOOL dockRight = ![self isFloatIndexBetween:floatIndex] && floatIndex >= 1.f;
+        
+        // should we pan it to the right?
+        if (dockRight)
+        {
+            leftPos = [self screenWidth] - currentViewController.containerView.width;
+        }
+    }
+    return leftPos;
+}
+
+
 /// calculates the specific rect
 - (CGRect)rectForControllerAtIndex:(NSUInteger)index {
     NSArray *frames = [self rectsForControllers];
@@ -792,8 +831,10 @@ enum {
             }
             
             // prevent scrolling < minimal width (except for the top view controller - allow stupidness!)
-            if (currentVCLeftPosition < minimalLeftInset && (!userDragging || (userDragging && !isTopViewController))) {
-                currentVCLeftPosition = minimalLeftInset;
+            float minimalLeftPositionForCurrentController = [self calcucalateMinimalLeftInsetForController:currentViewController];
+            if (currentVCLeftPosition < minimalLeftPositionForCurrentController)// minimalLeftInset /*&& (!userDragging || (userDragging && !isTopViewController))*/) {
+            {
+                currentVCLeftPosition = minimalLeftPositionForCurrentController;
             }
             
             // a previous view controller is not allowed to overlap the next view controller.
@@ -871,9 +912,21 @@ enum {
     } completion:nil];
 }
 
-- (void)handlePanFrom:(UIPanGestureRecognizer *)recognizer {    
+- (void)handlePanFrom:(UIPanGestureRecognizer *)recognizer {
+    
+    if (!self.enablePanning) {
+        return;
+    }
+    
     CGPoint translatedPoint = [recognizer translationInView:self.view];
     UIGestureRecognizerState state = recognizer.state;
+    
+    
+//    CGPoint translatedPointInTopViewController = [recognizer translationInView:self.topViewController.view];
+//    if (CGRectContainsPoint(self.topViewController.view.frame, translatedPointInTopViewController)) {
+//        [recognizer rese]
+//    }
+    
     
     // reset last offset if gesture just started
     if (state == UIGestureRecognizerStateBegan) {
@@ -900,6 +953,11 @@ enum {
             offset = roundf(offset/2.f);
         }
     }
+    
+    if (!self.enableLefPanning && offset < 0) {
+        return;
+    }
+    
     [self moveStackWithOffset:offset animated:NO userDragging:YES];
     
     // set up designated drag destination
@@ -936,7 +994,15 @@ enum {
             self.floatIndex = [self nearestValidFloatIndex:self.floatIndex round:PSSVRoundNearest];
         }
         
-        [self alignStackAnimated:YES];
+        
+        PanDirection direction = PanDirectionLeft;
+        if (lastDragOption_ == SVSnapOptionLeft) {
+            direction = PanDirectionLeft;
+        }
+        else if (lastDragOption_ == SVSnapOptionRight) {
+            direction = PanDirectionRight;
+        }
+        [self delegateDidPanEndedWithDirection:direction inViewController:self.topViewController];
     }
 }
 
@@ -1034,20 +1100,17 @@ enum {
     
     // relay willAppear and add to subview
     [viewController viewWillAppear:animated];
-    
-    if (animated) {
-        container.alpha = 0.f;
-        if (enableScalingFadeInOut_)
-            container.transform = CGAffineTransformMakeScale(1.2, 1.2); // large but fade in
-    }
-    
+      
     [self.view addSubview:container];
     
     if (animated) {
-        [UIView animateWithDuration:kPSSVStackAnimationPushDuration delay:0.f options:UIViewAnimationOptionAllowUserInteraction animations:^{
-            container.alpha = 1.f;
+        [UIView animateWithDuration:kPSSVStackAnimationPushDuration delay:0.f options:nil/*UIViewAnimationOptionAllowUserInteraction*/ animations:^{
+            //container.alpha = 1.f;
+            container.userInteractionEnabled = NO;
+            container.left = self.view.size.width; // push form right sight of device
             container.transform = CGAffineTransformIdentity;
         } completion:^(BOOL finished) {
+            self.view.userInteractionEnabled = YES;
             [viewController viewDidAppear:animated];
             [self delegateDidInsertViewController:viewController];
         }];
@@ -1087,15 +1150,16 @@ enum {
         
         PSSVSimpleBlock finishBlock = ^{
             [container removeFromSuperview];
+
             [lastController viewDidDisappear:animated];
             [self delegateDidRemoveViewController:lastController];
         };
-        
+
         if (animated) { // kPSSVStackAnimationDuration
-            [UIView animateWithDuration:kPSSVStackAnimationPopDuration delay:0.f options:UIViewAnimationOptionBeginFromCurrentState animations:^(void) {
-                lastController.containerView.alpha = 0.f;
-                if (enableScalingFadeInOut_)
-                    lastController.containerView.transform = CGAffineTransformMakeScale(0.8, 0.8); // make smaller while fading out
+            [UIView animateWithDuration:kPSSVStackAnimationPopDuration delay:0.f options:nil/*UIViewAnimationOptionAllowUserInteractionUIViewAnimationOptionBeginFromCurrentState*/ animations:^(void) {
+                [lastController.containerView setFrame:CGRectMake(1024, 0, lastController.containerView.size.width, lastController.containerView.size.height)];
+                lastController.containerView.transform = CGAffineTransformIdentity;
+
             } completion:^(BOOL finished) {
                 // even with duration = 0, this doesn't fire instantly but on a future runloop with NSFireDelayedPerform, thus ugly double-check
                 if (finished) {
@@ -1363,6 +1427,11 @@ enum {
     
 }
 
+- (void)alignStackAnimatedPerformSelectorVersion:(NSNumber *)animated
+{
+    [self alignStackAnimated:[animated boolValue]];
+}
+
 - (void)alignStackAnimated:(BOOL)animated; {
     if([self enableBounces]) {
         [self alignStackAnimated:animated duration:kPSSVStackAnimationDuration bounceType:PSSVBounceMoveToInitial];
@@ -1590,6 +1659,13 @@ enum {
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 - (BOOL)shouldReceiveTouchForView:(UIView *)view
 {
+    
+    //forbidden touches for non topViewController
+    if (self.topViewController.view != view)
+    {
+        return NO;
+    }    
+    
     NSMutableArray *viewsWithPanDisabled = [NSMutableArray arrayWithCapacity:0];
     for (UIViewController *c in self.viewControllers)
     {
