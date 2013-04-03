@@ -130,6 +130,11 @@ enum {
 /// Property to disable panning to left
 @property (nonatomic, assign) BOOL enableLefPanning;
 
+// When true, overlaped views (with overlap ratio under kPSSVOverlapMinimalValueToApplyDarkRatio)
+// do not accept touches from user. But, when view is tapped (via UITapGestureRecognizer), the
+// stack is poped to this viewController
+@property (nonatomic, assign) BOOL enablePopOverlapedViewOnTap;
+
 /// shadow width
 @property(nonatomic, assign) CGFloat defaultShadowWidth;
 
