@@ -976,10 +976,21 @@ enum {
             lastDragOption_ = SVSnapOptionLeft;
         }
     }else {
-        // if there's a continuous drag in one direction, keep designation - else use nearest to snap.
-        if ((lastDragOption_ == SVSnapOptionLeft && offset > 0) || (lastDragOption_ == SVSnapOptionRight && offset < 0)) {
-            lastDragOption_ = SVSnapOptionNearest;
+        //we disable nearest state in order to have only 2 variants: rightSwipe and pop; or leftSwipe ( and just to align stack to default position)// we look at last swipe direction
+        
+        if ((lastDragOption_ == SVSnapOptionLeft && offset > 0) )
+        {
+            lastDragOption_ = SVSnapOptionRight;
         }
+        else if (lastDragOption_ == SVSnapOptionRight && offset < 0)
+        {
+            lastDragOption_ = SVSnapOptionLeft;
+        }
+        
+//        // if there's a continuous drag in one direction, keep designation - else use nearest to snap.
+//        if ((lastDragOption_ == SVSnapOptionLeft && offset > 0) || (lastDragOption_ == SVSnapOptionRight && offset < 0)) {
+//            lastDragOption_ = SVSnapOptionNearest;
+//        }
     }
     
     // save last point to calculate new offset
@@ -1632,10 +1643,10 @@ enum {
 {
     
     //forbidden touches for non topViewController
-    if (self.topViewController.view != view)
+    if (![view isDescendantOfView:self.topViewController.view])
     {
         return NO;
-    }    
+    }   
     
     NSMutableArray *viewsWithPanDisabled = [NSMutableArray arrayWithCapacity:0];
     for (UIViewController *c in self.viewControllers)
