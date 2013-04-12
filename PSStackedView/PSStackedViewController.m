@@ -265,21 +265,25 @@ typedef void(^PSSVSimpleBlock)(void);
 }
 
 - (CGRect)viewRect {
-    // self.view.frame not used, it's wrong in viewWillAppear
-    CGRect viewRect = [[UIScreen mainScreen] applicationFrame];
+    //cause we dont' use fullscrean Stacked Controller we need view.frame
+    CGRect viewRect = self.view.frame;
+    //    // self.view.frame not used, it's wrong in viewWillAppear
+    //    CGRect viewRect = [[UIScreen mainScreen] applicationFrame];
     return viewRect;
 }
 
 // return screen width
 - (CGFloat)screenWidth {
     CGRect viewRect = [self viewRect];
-    CGFloat screenWidth = PSIsLandscape() ? viewRect.size.height : viewRect.size.width;
+//    CGFloat screenWidth = PSIsLandscape() ? viewRect.size.height : viewRect.size.width;
+    CGFloat screenWidth =  viewRect.size.width;
     return screenWidth;
 }
 
 - (CGFloat)screenHeight {
     CGRect viewRect = [self viewRect];
-    NSUInteger screenHeight = PSIsLandscape() ? viewRect.size.width : viewRect.size.height;
+//    NSUInteger screenHeight = PSIsLandscape() ? viewRect.size.width : viewRect.size.height;
+    NSUInteger screenHeight = viewRect.size.height;
     return screenHeight;
 }
 
